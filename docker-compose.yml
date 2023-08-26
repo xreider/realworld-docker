@@ -1,0 +1,126 @@
+version: '3'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: test-docker-frontend
+    # command: serve -s dist
+    command: yarn preview
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - PORT=3000
+    # - VITE_API_URL=http://api:3001
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5
+        window: 60s
+    networks:
+      - realword-docker-network
+
+  api:
+    build: ./api
+    container_name: test-docker-api
+    command: npm run start
+    restart: unless-stopped
+    # ports:
+    #   - '3001:3001'
+    environment:
+      - PORT=3001
+      # - HOST=http://test-docker.com
+      - MONGO_URL=mongodb://api_db:27017/api
+      - AUTH_API_URL=http://auth:3002/api
+    depends_on:
+      - api_db
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5
+        window: 60s
+    networks:
+      - realword-docker-network
+
+  auth:
+    build: ./auth
+    container_name: test-docker-auth
+    command: npm run start
+    restart: unless-stopped
+    # ports:
+    #   - '3002:3002'
+    environment:
+      - PORT=3002
+      # - HOST=http://test-docker.com
+      - MONGO_URL=mongodb://auth_db:27017/auth
+      - API_URL=http://api:3001/api
+    depends_on:
+      - auth_db
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5
+        window: 60s
+    networks:
+      - realword-docker-network
+
+  api_db:
+    image: mongo:latest
+    container_name: test-docker-api-db
+    volumes:
+      - mongodb_api:/data/db
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5
+        window: 60s
+    networks:
+      - realword-docker-network
+
+  auth_db:
+    image: mongo:latest
+    container_name: test-docker-auth-db
+    volumes:
+      - mongodb_auth:/data/db
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5
+        window: 60s
+    networks:
+      - realword-docker-network
+
+  nginx:
+    image: nginx:stable-alpine
+    container_name: test-nginx
+    ports:
+      - '80:80'
+    volumes:
+      - ./nginx/nginx.conf.prod:/etc/nginx/conf.d/nginx.conf
+    depends_on:
+      - frontend
+      - api
+      - auth
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5
+        window: 60s
+    networks:
+      - realword-docker-network
+
+volumes:
+  mongodb_api:
+  mongodb_auth:
+
+networks:
+  realword-docker-network:
+    driver: bridge
